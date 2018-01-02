@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.axis--x path {
+  display: none;
+}
+
+.line {
+  fill: none;
+  stroke: steelblue;
+  stroke-width: 1.5px;
+}
+
+p {
+  font: 1em "Helvetica", sans-serif;
+}
+
+</style>
+<svg width="960" height="500"></svg>
+<p id="hrsToWork"></p>
+<script src="d3.v4.min.js"></script>
+<script>
+// content originally taken from https://bl.ocks.org/mbostock/3884955
+// and subsequently modified by me.
+
+var svg = d3.select("svg"),
+    margin = {top: 20, right: 80, bottom: 30, left: 50},
+    width = svg.attr("width") - margin.left - margin.right,
+    height = svg.attr("height") - margin.top - margin.bottom,
+    g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+var parseTime = d3.timeParse("%d/%m/%Y");
+
+var x = d3.scaleTime().range([0, width]),
+    y = d3.scaleLinear().range([height, 0]),
+    z = d3.scaleOrdinal(d3.schemeCategory10);
+
+var today = new Date();
+
+var line = d3.line()
+    .curve(d3.curveBasis)
+    .x(function(d) { return x(d.date); })
+    .y(function(d) { return y(d.temperature); });
+
+//d3.tsv("data.tsv", type, function(error, data) {
+d3.csv("https://docs.google.com/spreadsheets/d/1MYt43_-wu_UDT7IHULiTJOrRmNWiBfBGEfp-UJRuKao/gviz/tq?tqx=out:csv", type, function(error, data) {
+  if (error) throw error;
+  window.a = data; // repl debugging
+
+  var remaining = {}
+  data.columns.slice(3).forEach(function(id) {
+    remaining[id] = 0 // init value for burndown
+  });
+
+  cities = data.columns.slice(3).map(function(id) {
+    remworkdays = 0; // number of unentered workdays -- used later for hrs-per-day
+    upcominghrs = 0; // number of estimated future-hours -- used later for hrs-per-day
+    return {
+      id: id,
+      values: data.map(function(d) {
+        if (d[id] !== null) {
+            remaining[id] += d[id];
+        } else {
+            if(d["Standard"] > 0){
+                remworkdays += 1;
+                upcominghrs += d["Standard"];
+            }
+            remaining[id] += d["Standard"];
+        }
+        return {date: d.date, temperature: remaining[id]};
+      })
+    };
+  });
+
+  x.domain(d3.extent(data, function(d) { return d.date; }));
+
+  y.domain([
+    d3.min(cities, function(c) { return d3.min(c.values, function(d) { return d.temperature; }); }),
+    d3.max(cities, function(c) { return d3.max(c.values, function(d) { return d.temperature; }); })
+  ]);
+
+  z.domain(cities.map(function(c) { return c.id; }));
+
+  g.append("g")
+      .attr("class", "axis axis--x")
+      .attr("transform", "translate(0," + height + ")")
+      .call(d3.axisBottom(x));
+
+  g.append("g")
+      .attr("class", "axis axis--y")
+      .call(d3.axisLeft(y))
+    .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", "0.71em")
+      .attr("fill", "#000")
+      .text("Contract hours consumed");
+
+  var city = g.selectAll(".city")
+    .data(cities)
+    .enter().append("g")
+      .attr("class", "city");
+
+  city.append("path")
+      .attr("class", "line")
+      .attr("d", function(d) { return line(d.values); })
+      .style("stroke", function(d) { return z(d.id); });
+
+  city.append("text")
+      .datum(function(d) { return {id: d.id, value: d.values[d.values.length - 1]}; })
+      .attr("transform", function(d) { return "translate(" + x(d.value.date) + "," + y(d.value.temperature) + ")"; })
+      .attr("x", 3)
+      .attr("dy", "0.35em")
+      .style("font", "10px sans-serif")
+      .text(function(d) { return d.id; });
+
+  // my hacky "Today's date" additions
+  svg.append("line")
+      .attr("x1", x(today) + margin.left)
+      .attr("y1", 0 + margin.top)
+      .attr("x2", x(today) + margin.left)
+      .attr("y2", height + margin.top)
+      .style("stroke-width", 2)
+      .style("stroke", "red")
+      .style("fill", "none");
+
+  g.append("g")
+      .attr("class", "axis axis--y")
+      .call(d3.axisLeft(y))
+   .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("x", 0)
+      .attr("y", x(today))
+      .attr("dy", "1.2em")
+      .attr("fill", "#000")
+      .text("Today's date");
+
+  hrsToWork = (d3.max(cities[0].values.map(function(d) {return d.temperature}))
+    + upcominghrs
+    - d3.max(cities[1].values.map(function(d) {return d.temperature})))/remworkdays
+
+  hrsText = g.append("g")
+    .attr("class", "axis axis--x")
+  .append("text")
+    .attr("y", height)
+    .attr("x", width)
+    .attr("dy", "-2.2em")
+    .attr("dx", "-30em")
+    .attr("font-size", "0.8em")
+    .attr("fill", "#000")
+    .text("Can work " + hrsToWork.toFixed(1) + " hrs per workday from today without reaching contract cap");
+
+  hrsText.each(function(d, i) {
+    rect = this.getBBox(); // get bounding box of hours remaining text
+  });
+
+  var paddingLeftRight = 18; // adjust the padding values depending on font and font size
+  var paddingTopBottom = 5;
+
+  g.append("rect")
+    .attr("x", rect.x - paddingLeftRight/2)
+    .attr("y", rect.y - paddingTopBottom/2)
+    .attr("width", rect.width + paddingLeftRight)
+    .attr("height", rect.height + paddingTopBottom)
+    .style("fill", "none")
+    .style("stroke-width", 1.5)
+    .style("stroke", "#000");
+
+  //document.getElementById("hrsToWork").innerHTML = "Must work " + hrsToWork.toFixed(1) + " hrs per workday to hit contract cap"
+});
+
+function type(d, _, columns) {
+  d.date = parseTime(d.date);
+  for (var i = 2, n = columns.length, c; i < n; ++i) d[c = columns[i]] = handleVals(d[c]);
+  return d;
+}
+
+function handleVals(v) {
+    if (v===""){
+        return null;
+    }
+    return +v;
+}
+
+</script>
