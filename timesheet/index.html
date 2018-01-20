@@ -117,9 +117,9 @@ d3.csv("https://docs.google.com/spreadsheets/d/1MYt43_-wu_UDT7IHULiTJOrRmNWiBfBG
 
   // my hacky "Today's date" additions
   svg.append("line")
-      .attr("x1", x(today) + margin.left)
+      .attr("x1", (x(today) + x(d3.timeDay.offset(today,-1)))/2 + margin.left - 1)
       .attr("y1", 0 + margin.top)
-      .attr("x2", x(today) + margin.left)
+      .attr("x2", (x(today) + x(d3.timeDay.offset(today,-1)))/2 + margin.left - 1)
       .attr("y2", height + margin.top)
       .style("stroke-width", 2)
       .style("stroke", "red")
