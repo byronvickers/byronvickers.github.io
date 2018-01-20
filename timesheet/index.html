@@ -6,9 +6,17 @@
   display: none;
 }
 
-.line {
+/* Straight-line */
+.line0 {
   fill: none;
   stroke: steelblue;
+  stroke-width: 1.5px;
+}
+
+/* Actual/forecast */
+.line1 {
+  fill: none;
+  stroke: url(#line-gradient);
   stroke-width: 1.5px;
 }
 
@@ -56,6 +64,7 @@ d3.csv("https://docs.google.com/spreadsheets/d/1MYt43_-wu_UDT7IHULiTJOrRmNWiBfBG
   cities = data.columns.slice(3).map(function(id) {
     remworkdays = 0; // number of unentered workdays -- used later for hrs-per-day
     upcominghrs = 0; // number of estimated future-hours -- used later for hrs-per-day
+    lastrecorded = null; // last day for which hours have been logged (i.e. day prior to first unlogged hours)
     return {
       id: id,
       values: data.map(function(d) {
@@ -63,6 +72,9 @@ d3.csv("https://docs.google.com/spreadsheets/d/1MYt43_-wu_UDT7IHULiTJOrRmNWiBfBG
             remaining[id] += d[id];
         } else {
             if(d["Standard"] > 0){
+                if( lastrecorded == null ){
+                    lastrecorded = d.date
+                }
                 remworkdays += 1;
                 upcominghrs += d["Standard"];
             }
@@ -80,7 +92,26 @@ d3.csv("https://docs.google.com/spreadsheets/d/1MYt43_-wu_UDT7IHULiTJOrRmNWiBfBG
     d3.max(cities, function(c) { return d3.max(c.values, function(d) { return d.temperature; }); })
   ]);
 
-  z.domain(cities.map(function(c) { return c.id; }));
+  z.domain(cities.map(function(c) { return c.id; }).concat("forecast"));
+
+  forecastmax = d3.max(cities[1].values.map(function(d) {return d.temperature}))
+  actualmax = d3.max(cities[1].values.map(function(d) {if(d.date < lastrecorded){return d.temperature} else return 0}))
+  g.append("linearGradient")
+        .attr("id", "line-gradient")
+        .attr("gradientUnits", "userSpaceOnUse")
+        .attr("x1", 0).attr("y1", y(0))
+        .attr("x2", 0).attr("y2", y(forecastmax))
+    .selectAll("stop")
+        .data([
+            {offset: "0%", color: "#FF7F0E", opacity: "1"},
+            {offset: actualmax/forecastmax, color: "#FF7F0E", opacity: "1"},
+            {offset: actualmax/forecastmax, color: "steelblue", opacity: "0.7"},
+            {offset: "100%", color: "steelblue", opacity: "0.2"},
+        ])
+    .enter().append("stop")
+        .attr("offset", function(d) { return d.offset; })
+        .attr("stop-color", function(d) { return d.color; })
+        .attr("stop-opacity", function(d) { return d.opacity; });
 
   g.append("g")
       .attr("class", "axis axis--x")
@@ -103,9 +134,9 @@ d3.csv("https://docs.google.com/spreadsheets/d/1MYt43_-wu_UDT7IHULiTJOrRmNWiBfBG
       .attr("class", "city");
 
   city.append("path")
-      .attr("class", "line")
+      .attr("class", function(d,i) { return "line" + i; })
       .attr("d", function(d) { return line(d.values); })
-      .style("stroke", function(d) { return z(d.id); });
+      //.style("stroke", function(d) { return z(d.id); });
 
   city.append("text")
       .datum(function(d) { return {id: d.id, value: d.values[d.values.length - 1]}; })
@@ -146,10 +177,10 @@ d3.csv("https://docs.google.com/spreadsheets/d/1MYt43_-wu_UDT7IHULiTJOrRmNWiBfBG
     .attr("y", height)
     .attr("x", width)
     .attr("dy", "-2.2em")
-    .attr("dx", "-30em")
+    .attr("dx", "-35em")
     .attr("font-size", "0.8em")
     .attr("fill", "#000")
-    .text("Can work " + hrsToWork.toFixed(1) + " hrs per workday from today without reaching contract cap");
+    .text("Can work " + hrsToWork.toFixed(1) + " hrs per workday from last recorded date without reaching contract cap");
 
   hrsText.each(function(d, i) {
     rect = this.getBBox(); // get bounding box of hours remaining text
