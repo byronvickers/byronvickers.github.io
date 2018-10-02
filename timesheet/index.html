@@ -52,7 +52,7 @@ var line = d3.line()
     .y(function(d) { return y(d.temperature); });
 
 //d3.tsv("data.tsv", type, function(error, data) {
-d3.csv("https://docs.google.com/spreadsheets/d/1MYt43_-wu_UDT7IHULiTJOrRmNWiBfBGEfp-UJRuKao/gviz/tq?tqx=out:csv", type, function(error, data) {
+d3.csv("https://docs.google.com/spreadsheets/d/1HM30ZokCzZgsNZSQj-GEk1VfmJ49T4PNF5hMSI5cQOY/gviz/tq?tqx=out:csv", type, function(error, data) {
   if (error) throw error;
   window.a = data; // repl debugging
 
